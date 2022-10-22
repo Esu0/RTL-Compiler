@@ -1,4 +1,5 @@
 use std::io::Read;
+use errors::{Error, ErrorKind};
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd)]
 #[allow(dead_code)]
@@ -129,7 +130,7 @@ pub fn error_at(code: &Vec<char>, pos: usize, msg: &str, range: Option<(usize, u
 
 #[allow(dead_code)]
 impl TokenList {
-    pub fn gen_tokens(b: Vec<char>) -> Result<Self, std::io::Error> {
+    pub fn gen_tokens(b: Vec<char>) -> Result<Self, Error> {
         let mut v = Vec::new();
         let mut n = 0i32;
         let mut push = false;
@@ -154,8 +155,8 @@ impl TokenList {
                 continue;
             }
             error_at(&b, i, "構文エラー", None);
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
+            return Err(Error::new(
+                ErrorKind::InvalidChar,
                 "compile error.",
             ));
         }
@@ -169,18 +170,18 @@ impl TokenList {
         })
     }
 
-    pub fn from_file(path: String) -> Result<Self, std::io::Error> {
+    pub fn from_file(path: String) -> Result<Self, Error> {
         let mut f = match std::fs::File::open(std::path::Path::new(&path)) {
             Ok(f) => f,
             Err(e) => {
-                return Err(e);
+                return Err(Error::new(ErrorKind::CannotReadFile, e));
             }
         };
         let mut s = String::new();
         match f.read_to_string(&mut s) {
             Ok(_) => (),
             Err(e) => {
-                return Err(e);
+                return Err(Error::new(ErrorKind::CannotReadFile, e));
             }
         };
         TokenList::gen_tokens(s.chars().collect())
@@ -197,13 +198,13 @@ impl TokenList {
 
     /// if kind is matched, go to next token.
     /// Or, it returns Error.
-    pub fn expect_kind(&mut self, kind: TokenKind) -> Result<(), std::io::Error> {
+    pub fn expect_kind(&mut self, kind: TokenKind) -> Result<(), Error> {
         if self.consume_kind(kind) {
             return Ok(());
         }
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "different kind.",
+        Err(Error::new(
+            ErrorKind::SyntaxError,
+            "syntax error.",
         ))
     }
 
@@ -217,30 +218,30 @@ impl TokenList {
         false
     }
 
-    pub fn expect(&mut self, dat: DataUnion) -> Result<(), std::io::Error> {
+    pub fn expect(&mut self, dat: DataUnion) -> Result<(), Error> {
         if self.consume(dat) {
             return Ok(());
         }
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
+        Err(Error::new(
+            ErrorKind::SyntaxError,
             "構文エラー",
         ))
     }
 
-    pub fn next_number(&mut self) -> Result<i32, std::io::Error> {
+    pub fn next_number(&mut self) -> Result<i32, Error> {
         let tkn = &self.list[self.index];
         if tkn.tk == TokenKind::Number {
             self.index += 1;
             return match tkn.data {
                 DataUnion::Num(n) => Ok(n),
-                _ => Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                _ => Err(Error::new(
+                    ErrorKind::InvalidData,
                     "unexpected error.",
                 )),
             };
         }
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
+        Err(Error::new(
+            ErrorKind::SyntaxError,
             "not a number.",
         ))
     }
@@ -249,7 +250,7 @@ impl TokenList {
         self.list[self.index].tk
     }
 
-    pub fn calculate(&mut self) -> Result<i32, std::io::Error> {
+    pub fn calculate(&mut self) -> Result<i32, Error> {
         let mut n = match self.next_number() {
             Ok(n) => n,
             Err(err) => {
@@ -276,8 +277,8 @@ impl TokenList {
                 continue;
             }
             println!("解析エラー");
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
+            return Err(Error::new(
+                ErrorKind::SyntaxError,
                 "compile error",
             ));
         }

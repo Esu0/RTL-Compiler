@@ -1,6 +1,7 @@
-use std::io::{Error, ErrorKind};
+use errors::{Error, ErrorKind};
 use std::rc::Rc;
 use token::{DataUnion, TokenList};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(dead_code)]
 pub enum Ntype {
@@ -71,8 +72,8 @@ impl Node {
                 if token.current() == token::TokenKind::Eof {
                     Ok(tr)
                 } else {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
+                    Err(Error::new(
+                        ErrorKind::InvalidData,
                         "unexpected error.",
                     ))
                 }
