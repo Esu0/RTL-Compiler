@@ -1,15 +1,21 @@
 use errors::{Error, ErrorKind};
 use std::rc::Rc;
-use token::{DataUnion, TokenList};
+use token::{DataUnion, TokenKind, TokenList};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(dead_code)]
 pub enum Ntype {
     Num,
+    Lvar,
     Add,
     Sub,
     Mul,
     Div,
+    Eq,
+    Neq,
+    Greater,
+    GreaterEq,
+    Assign,
 }
 
 #[derive(Clone)]
@@ -58,6 +64,14 @@ impl Node {
         }
     }
 
+    pub fn lvar(name: Vec<char>) -> Self {
+        Self {
+            ty: Ntype::Lvar,
+            childs: None,
+            value: DataUnion::String(name),
+        }
+    }
+
     pub fn from_child(ch1: Self, ch2: Self, ty: Ntype) -> Self {
         Self {
             ty,
@@ -66,23 +80,168 @@ impl Node {
         }
     }
 
-    pub fn gen_tree(token: &mut TokenList) -> Result<Self, Error> {
-        match Node::expr(token) {
+    pub fn gen_tree(token: &mut TokenList) -> Result<Vec<Self>, Error> {
+        match Node::program(token) {
             Ok(tr) => {
                 if token.current() == token::TokenKind::Eof {
                     Ok(tr)
                 } else {
-                    Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "unexpected error.",
-                    ))
+                    token.error_at();
+                    Err(Error::new(ErrorKind::InvalidData, format!("errors at {}th token", token.get_index())))
                 }
             }
             Err(e) => Err(e),
         }
     }
 
+    pub fn program(token: &mut TokenList) -> Result<Vec<Self>, Error> {
+        let mut nodes = Vec::new();
+        while token.current() != TokenKind::Eof {
+            nodes.push(match Self::stmt(token) {
+                Ok(n) => n,
+                Err(e) => {
+                    return Err(e);
+                }
+            });
+        }
+        Ok(nodes)
+    }
+
+    fn stmt(token: &mut TokenList) -> Result<Self, Error> {
+        let node = match Self::expr(token) {
+            Ok(n) => n,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+        token.expect(DataUnion::char(';'))?;
+        Ok(node)
+    }
+
     fn expr(token: &mut TokenList) -> Result<Self, Error> {
+        Self::assign(token)
+    }
+
+    fn assign(token: &mut TokenList) -> Result<Self, Error> {
+        let node = match Self::equality(token) {
+            Ok(n) => n,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+        if token.consume(DataUnion::char('=')) {
+            Ok(Node::from_child(
+                node,
+                match Self::assign(token) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        return Err(e);
+                    }
+                },
+                Ntype::Assign,
+            ))
+        } else {
+            Ok(node)
+        }
+    }
+
+    fn equality(token: &mut TokenList) -> Result<Self, Error> {
+        let mut node = match Self::relational(token) {
+            Ok(n) => n,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+        loop {
+            if token.consume(DataUnion::str("==")) {
+                node = Self::from_child(
+                    node,
+                    match Self::relational(token) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    Ntype::Eq,
+                );
+            } else if token.consume(DataUnion::str("!=")) {
+                node = Self::from_child(
+                    node,
+                    match Self::relational(token) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    Ntype::Neq,
+                );
+            } else {
+                break;
+            }
+        }
+        Ok(node)
+    }
+
+    fn relational(token: &mut TokenList) -> Result<Self, Error> {
+        let mut node = match Self::add(token) {
+            Ok(n) => n,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+        loop {
+            if token.consume(DataUnion::str(">")) {
+                node = Self::from_child(
+                    node,
+                    match Self::relational(token) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    Ntype::Greater,
+                );
+            } else if token.consume(DataUnion::str("<")) {
+                node = Self::from_child(
+                    match Self::relational(token) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    node,
+                    Ntype::Greater,
+                );
+            } else if token.consume(DataUnion::str(">=")) {
+                node = Self::from_child(
+                    node,
+                    match Self::relational(token) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    Ntype::GreaterEq,
+                );
+            } else if token.consume(DataUnion::str("<=")) {
+                node = Self::from_child(
+                    match Self::relational(token) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    },
+                    node,
+                    Ntype::GreaterEq,
+                );
+            } else {
+                break;
+            }
+        }
+        Ok(node)
+    }
+
+    fn add(token: &mut TokenList) -> Result<Self, Error> {
         let mut node = match Node::mul(token) {
             Ok(n) => n,
             Err(e) => {
@@ -190,12 +349,21 @@ impl Node {
                 }
             }
         }
-        Ok(Node::number(match token.next_number() {
-            Ok(n) => n,
-            Err(e) => {
-                return Err(e);
-            }
-        }))
+        if token.consume_kind(TokenKind::Number) {
+            Ok(Node::number(match token.next_number() {
+                Ok(n) => n,
+                Err(e) => {
+                    return Err(e);
+                }
+            }))
+        } else {
+            Ok(Node::lvar(match token.next_ident() {
+                Ok(s) => s,
+                Err(e) => {
+                    return Err(e);
+                }
+            }))
+        }
     }
 
     fn compile(&self) -> Result<i32, Error> {
@@ -248,6 +416,33 @@ impl Node {
     }
 }
 
+pub struct Program {
+    stmts: Vec<Node>,
+}
+
+impl Program {
+    pub fn from_tokens(token: &mut TokenList) -> Result<Self, Error> {
+        let mut nodes = Vec::new();
+        while token.current() != TokenKind::Eof {
+            nodes.push(match Node::stmt(token) {
+                Ok(n) => n,
+                Err(e) => {
+                    return Err(e);
+                }
+            });
+        }
+        Ok(Self { stmts: nodes })
+    }
+}
+
+impl std::fmt::Debug for Program {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, tr) in self.stmts.iter().enumerate() {
+            writeln!(f, "{}th statement:\n{:?}", i, tr)?;
+        }
+        Ok(())
+    }
+}
 #[cfg(test)]
 mod tests {
 
@@ -262,8 +457,8 @@ mod tests {
     fn gen_tree_test() {
         let mut tokens = TokenList::from_file("../code.txt".to_string()).unwrap();
         println!("{:?}", tokens);
-        let tree = Node::gen_tree(&mut tokens).unwrap();
+        let tree = Program::from_tokens(&mut tokens).unwrap();
         println!("{:?}", tree);
-        println!("{}", tree.compile().unwrap());
+        //println!("{}", tree.compile().unwrap());
     }
 }

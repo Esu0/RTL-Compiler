@@ -49,6 +49,12 @@ impl error::Error for Error {
     }
 }
 
+impl From<ErrorKind> for Error {
+    fn from(kind: ErrorKind) -> Error {
+        Error { _error: _Error::Simple(kind) }
+    }
+}
+
 impl ErrorKind {
     pub fn msg(self) -> &'static str {
         match self {
