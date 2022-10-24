@@ -3,29 +3,5 @@
 version = 3
 
 [[package]]
-name = "ast"
+name = "compiler"
 version = "0.1.0"
-dependencies = [
- "errors",
- "token",
-]
-
-[[package]]
-name = "errors"
-version = "0.1.0"
-
-[[package]]
-name = "main"
-version = "0.1.0"
-dependencies = [
- "ast",
- "errors",
- "token",
-]
-
-[[package]]
-name = "token"
-version = "0.1.0"
-dependencies = [
- "errors",
-]

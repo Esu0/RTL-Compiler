@@ -1,22 +1,8 @@
-use errors::{Error, ErrorKind};
+use super::Ntype;
+use crate::error::{Error, ErrorKind};
+use crate::tokenize::{TokenKind, TokenList};
+use crate::datatype::DataUnion;
 use std::rc::Rc;
-use token::{DataUnion, TokenKind, TokenList};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[allow(dead_code)]
-pub enum Ntype {
-    Num,
-    Lvar,
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Eq,
-    Neq,
-    Greater,
-    GreaterEq,
-    Assign,
-}
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -24,17 +10,6 @@ pub struct Node {
     ty: Ntype,
     childs: Option<Rc<(Node, Node)>>,
     value: DataUnion,
-}
-
-#[allow(dead_code)]
-impl Ntype {
-    fn has_childs(self) -> bool {
-        if self > Ntype::Num {
-            false
-        } else {
-            true
-        }
-    }
 }
 
 impl std::fmt::Debug for Node {
@@ -83,11 +58,14 @@ impl Node {
     pub fn gen_tree(token: &mut TokenList) -> Result<Vec<Self>, Error> {
         match Node::program(token) {
             Ok(tr) => {
-                if token.current() == token::TokenKind::Eof {
+                if token.current() == TokenKind::Eof {
                     Ok(tr)
                 } else {
                     token.error_at();
-                    Err(Error::new(ErrorKind::InvalidData, format!("errors at {}th token", token.get_index())))
+                    Err(Error::new(
+                        ErrorKind::InvalidData,
+                        format!("errors at {}th token", token.get_index()),
+                    ))
                 }
             }
             Err(e) => Err(e),
@@ -107,7 +85,7 @@ impl Node {
         Ok(nodes)
     }
 
-    fn stmt(token: &mut TokenList) -> Result<Self, Error> {
+    pub fn stmt(token: &mut TokenList) -> Result<Self, Error> {
         let node = match Self::expr(token) {
             Ok(n) => n,
             Err(e) => {
@@ -249,7 +227,7 @@ impl Node {
             }
         };
 
-        while token.current() != token::TokenKind::Eof {
+        while token.current() != TokenKind::Eof {
             if token.consume(DataUnion::char('+')) {
                 let mut tmp = Node::new(Ntype::Add);
                 let right = match Node::mul(token) {
@@ -285,7 +263,7 @@ impl Node {
             }
         };
 
-        while token.current() != token::TokenKind::Eof {
+        while token.current() != TokenKind::Eof {
             if token.consume(DataUnion::char('*')) {
                 let mut tmp = Node::new(Ntype::Mul);
                 let right = match Node::unary(token) {
@@ -413,52 +391,5 @@ impl Node {
             ch.1.format_debug(f, indent + 1)?;
         }
         Ok(())
-    }
-}
-
-pub struct Program {
-    stmts: Vec<Node>,
-}
-
-impl Program {
-    pub fn from_tokens(token: &mut TokenList) -> Result<Self, Error> {
-        let mut nodes = Vec::new();
-        while token.current() != TokenKind::Eof {
-            nodes.push(match Node::stmt(token) {
-                Ok(n) => n,
-                Err(e) => {
-                    return Err(e);
-                }
-            });
-        }
-        Ok(Self { stmts: nodes })
-    }
-}
-
-impl std::fmt::Debug for Program {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i, tr) in self.stmts.iter().enumerate() {
-            writeln!(f, "{}th statement:\n{:?}", i, tr)?;
-        }
-        Ok(())
-    }
-}
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    #[test]
-    fn it_works() {
-        let node = Node::new(Ntype::Add);
-        println!("{:?}", node);
-    }
-
-    #[test]
-    fn gen_tree_test() {
-        let mut tokens = TokenList::from_file("../code.txt".to_string()).unwrap();
-        println!("{:?}", tokens);
-        let tree = Program::from_tokens(&mut tokens).unwrap();
-        println!("{:?}", tree);
-        //println!("{}", tree.compile().unwrap());
     }
 }

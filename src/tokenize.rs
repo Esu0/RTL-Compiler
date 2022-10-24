@@ -1,28 +1,13 @@
-use errors::{Error, ErrorKind};
+mod kind;
+mod token;
+
+use crate::{
+    datatype::DataUnion,
+    error::{kind::ErrorKind, Error},
+};
+pub use kind::TokenKind;
 use std::io::Read;
-
-#[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd)]
-#[allow(dead_code)]
-pub enum TokenKind {
-    Number,
-    Reserved,
-    Ident,
-    Eof,
-}
-
-#[derive(Clone, PartialEq, Eq, PartialOrd)]
-pub enum DataUnion {
-    String(Vec<char>),
-    Num(i32),
-    None,
-}
-
-#[derive(Clone)]
-#[allow(dead_code)]
-pub struct Token {
-    tk: TokenKind,
-    data: DataUnion,
-}
+pub use token::Token;
 
 #[allow(dead_code)]
 pub struct TokenList {
@@ -30,146 +15,14 @@ pub struct TokenList {
     index: usize,
 }
 
-fn is_space(ch: char) -> bool {
-    ch.is_whitespace()
-}
-
-fn is_ident(ch: char) -> bool {
-    ch.is_ascii_alphabetic() || ch == '_'
-}
-
-fn include_reserved(str: &[char]) -> Option<usize> {
-    const RESERVED: &[&[char]] = &[
-        &['+'],
-        &['-'],
-        &['*'],
-        &['/'],
-        &['('],
-        &[')'],
-        &['=', '='],
-        &['!', '='],
-        &['<'],
-        &['>'],
-        &['<', '='],
-        &['>', '='],
-        &[';'],
-        &['='],
-    ];
-    const MAXSIZE: usize = 2;
-    let maxi = std::cmp::min(MAXSIZE, str.len());
-    let mut n = 0;
-    for re in RESERVED {
-        if *str.get(..re.len()).unwrap_or_default() == **re {
-            n = std::cmp::max(re.len(), n);
-            if n == maxi {
-                return Some(n);
-            }
-        }
-    }
-    if n == 0 {
-        None
-    } else {
-        Some(n)
-    }
-}
-
-impl std::fmt::Debug for DataUnion {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DataUnion::None => write!(f, "None"),
-            DataUnion::Num(n) => write!(f, "{n:?}"),
-            DataUnion::String(s) => write!(f, "{:?}", s.iter().collect::<String>()),
-        }
-    }
-}
-
-impl std::fmt::Debug for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{:?}, kind:{:?}]", self.data, self.tk)
-    }
-}
-
 impl std::fmt::Debug for TokenList {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match write!(f, "[") {
-            Err(e) => {
-                return Err(e);
-            }
-            _ => (),
-        };
+        write!(f, "[")?;
         for tkn in &self.list {
-            match write!(f, "{:?}, ", tkn) {
-                Err(e) => {
-                    return Err(e);
-                }
-                _ => (),
-            };
+            write!(f, "{:?}, ", tkn)?;
         }
         write!(f, "]")
     }
-}
-
-impl DataUnion {
-    pub fn number(n: i32) -> Self {
-        Self::Num(n)
-    }
-
-    pub fn str(s: &str) -> Self {
-        Self::String(s.chars().collect())
-    }
-
-    pub fn char(c: char) -> Self {
-        Self::String(vec![c])
-    }
-
-    pub fn cstr(s: &[char]) -> Self {
-        Self::String(s.to_vec())
-    }
-}
-
-#[allow(dead_code)]
-impl Token {
-    pub fn new(tk: TokenKind, data: DataUnion) -> Self {
-        Token { tk, data }
-    }
-
-    pub fn with_str(tk: TokenKind, word: &str) -> Self {
-        Token {
-            tk,
-            data: DataUnion::String(word.chars().collect()),
-        }
-    }
-}
-
-pub fn error_at(code: &Vec<char>, pos: usize, msg: &str, range: Option<(usize, usize)>) {
-    match range {
-        Some((l, r)) => {
-            if pos > l {
-                let spaces = pos - l;
-                println!(
-                    "{} >>>{}",
-                    code[0..spaces].iter().collect::<String>(),
-                    code[spaces..(spaces + r)].iter().collect::<String>()
-                );
-            } else if pos + r < code.len() {
-                println!(
-                    "{} >>>{}",
-                    code[..pos].iter().collect::<String>(),
-                    code[pos..(pos + r)].iter().collect::<String>()
-                );
-            } else {
-                println!(
-                    "{} >>>{}",
-                    code[..pos].iter().collect::<String>(),
-                    code[pos..].iter().collect::<String>()
-                );
-            }
-            println!("{}", msg);
-        }
-        None => {
-            error_at(code, pos, msg, Some((30, 30)));
-        }
-    };
 }
 
 #[allow(dead_code)]
@@ -261,7 +114,10 @@ impl TokenList {
             return Ok(());
         }
         self.error_at();
-        Err(Error::new(ErrorKind::SyntaxError, format!("errors at {}th token", self.index)))
+        Err(Error::new(
+            ErrorKind::SyntaxError,
+            format!("errors at {}th token", self.index),
+        ))
     }
 
     /// If data is matched, go to next token and it returns true.
@@ -279,7 +135,10 @@ impl TokenList {
             return Ok(());
         }
         self.error_at();
-        Err(Error::new(ErrorKind::SyntaxError, format!("errors at {}th token", self.index)))
+        Err(Error::new(
+            ErrorKind::SyntaxError,
+            format!("errors at {}th token", self.index),
+        ))
     }
 
     pub fn next_number(&mut self) -> Result<i32, Error> {
@@ -290,12 +149,18 @@ impl TokenList {
                 DataUnion::Num(n) => Ok(n),
                 _ => {
                     self.error_at();
-                    Err(Error::new(ErrorKind::InvalidData, format!("errors at {}th token", self.index)))
-                },
+                    Err(Error::new(
+                        ErrorKind::InvalidData,
+                        format!("errors at {}th token", self.index),
+                    ))
+                }
             };
         }
         self.error_at();
-        Err(Error::new(ErrorKind::SyntaxError, format!("errors at {}th token", self.index)))
+        Err(Error::new(
+            ErrorKind::SyntaxError,
+            format!("errors at {}th token", self.index),
+        ))
     }
 
     pub fn next_ident(&mut self) -> Result<Vec<char>, Error> {
@@ -306,12 +171,18 @@ impl TokenList {
                 DataUnion::String(s) => Ok(s.clone()),
                 _ => {
                     self.error_at();
-                    Err(Error::new(ErrorKind::InvalidData, format!("errors at {}th token", self.index)))
-                },
+                    Err(Error::new(
+                        ErrorKind::InvalidData,
+                        format!("errors at {}th token", self.index),
+                    ))
+                }
             }
         } else {
             self.error_at();
-            Err(Error::new(ErrorKind::SyntaxError, format!("errors at {}th token", self.index)))
+            Err(Error::new(
+                ErrorKind::SyntaxError,
+                format!("errors at {}th token", self.index),
+            ))
         }
     }
 
@@ -363,33 +234,76 @@ impl TokenList {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::File;
-    use std::io::Read;
-    use std::path::Path;
-    #[test]
-    fn it_works() {
-        let token = Token::with_str(TokenKind::Number, "123");
-        println!("{:?}", token);
-    }
+fn is_space(ch: char) -> bool {
+    ch.is_whitespace()
+}
 
-    #[test]
-    fn simple_math() {
-        let path_str = "./test.txt";
-        let mut f = File::open(Path::new(path_str)).expect("file open failed.");
-        let mut s = String::new();
-        f.read_to_string(&mut s).unwrap();
-        let mut tokens = TokenList::gen_tokens(s.chars().collect()).unwrap();
-        println!("{:?}", tokens);
-        let n = tokens.calculate().unwrap();
-        println!("{}", n);
-    }
+fn is_ident(ch: char) -> bool {
+    ch.is_ascii_alphabetic() || ch == '_'
+}
 
-    #[test]
-    fn gen_token_test() {
-        let tokens = TokenList::from_file("../code.txt".to_string()).unwrap();
-        println!("{:?}", tokens);
+fn include_reserved(str: &[char]) -> Option<usize> {
+    const RESERVED: &[&[char]] = &[
+        &['+'],
+        &['-'],
+        &['*'],
+        &['/'],
+        &['('],
+        &[')'],
+        &['=', '='],
+        &['!', '='],
+        &['<'],
+        &['>'],
+        &['<', '='],
+        &['>', '='],
+        &[';'],
+        &['='],
+    ];
+    const MAXSIZE: usize = 2;
+    let maxi = std::cmp::min(MAXSIZE, str.len());
+    let mut n = 0;
+    for re in RESERVED {
+        if *str.get(..re.len()).unwrap_or_default() == **re {
+            n = std::cmp::max(re.len(), n);
+            if n == maxi {
+                return Some(n);
+            }
+        }
     }
+    if n == 0 {
+        None
+    } else {
+        Some(n)
+    }
+}
+
+fn error_at(code: &Vec<char>, pos: usize, msg: &str, range: Option<(usize, usize)>) {
+    match range {
+        Some((l, r)) => {
+            if pos > l {
+                let spaces = pos - l;
+                println!(
+                    "{} >>>{}",
+                    code[0..spaces].iter().collect::<String>(),
+                    code[spaces..(spaces + r)].iter().collect::<String>()
+                );
+            } else if pos + r < code.len() {
+                println!(
+                    "{} >>>{}",
+                    code[..pos].iter().collect::<String>(),
+                    code[pos..(pos + r)].iter().collect::<String>()
+                );
+            } else {
+                println!(
+                    "{} >>>{}",
+                    code[..pos].iter().collect::<String>(),
+                    code[pos..].iter().collect::<String>()
+                );
+            }
+            println!("{}", msg);
+        }
+        None => {
+            error_at(code, pos, msg, Some((30, 30)));
+        }
+    };
 }
