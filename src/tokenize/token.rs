@@ -1,4 +1,4 @@
-use super::TokenKind;
+use super::kind::TokenKind;
 use crate::datatype::DataUnion;
 
 #[derive(Clone)]
@@ -25,5 +25,17 @@ impl Token {
             tk,
             data: DataUnion::String(word.chars().collect()),
         }
+    }
+
+    pub fn is_kind(&self, kind: TokenKind) -> bool {
+        self.tk == kind
+    }
+
+    pub fn eq_data(&self, data: DataUnion) -> bool {
+        self.data == data
+    }
+
+    pub fn get_data(&self) -> &DataUnion {
+        &self.data
     }
 }

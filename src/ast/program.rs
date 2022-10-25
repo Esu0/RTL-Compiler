@@ -1,14 +1,14 @@
 use super::Node;
 use crate::error::Error;
-use crate::tokenize::{TokenKind, TokenList};
+use crate::tokenize::{TokenGen, TokenKind};
 pub struct Program {
     stmts: Vec<Node>,
 }
 
 impl Program {
-    pub fn from_tokens(token: &mut TokenList) -> Result<Self, Error> {
+    pub fn from_tokens(token: &mut TokenGen) -> Result<Self, Error> {
         let mut nodes = Vec::new();
-        while token.current() != TokenKind::Eof {
+        while !token.current().is_kind(TokenKind::Eof) {
             nodes.push(match Node::stmt(token) {
                 Ok(n) => n,
                 Err(e) => {

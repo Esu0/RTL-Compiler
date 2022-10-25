@@ -1,7 +1,7 @@
 use super::Ntype;
-use crate::error::{Error, ErrorKind};
-use crate::tokenize::{TokenKind, TokenList};
 use crate::datatype::DataUnion;
+use crate::error::{Error, ErrorKind};
+use crate::tokenize::{TokenGen, TokenKind};
 use std::rc::Rc;
 
 #[derive(Clone)]
@@ -55,26 +55,23 @@ impl Node {
         }
     }
 
-    pub fn gen_tree(token: &mut TokenList) -> Result<Vec<Self>, Error> {
+    pub fn gen_tree(token: &mut TokenGen) -> Result<Vec<Self>, Error> {
         match Node::program(token) {
             Ok(tr) => {
-                if token.current() == TokenKind::Eof {
+                if token.current().is_kind(TokenKind::Eof) {
                     Ok(tr)
                 } else {
-                    token.error_at();
-                    Err(Error::new(
-                        ErrorKind::InvalidData,
-                        format!("errors at {}th token", token.get_index()),
-                    ))
+                    token.error_at("", None);
+                    Err(Error::new(ErrorKind::InvalidData, "unexpected error."))
                 }
             }
             Err(e) => Err(e),
         }
     }
 
-    pub fn program(token: &mut TokenList) -> Result<Vec<Self>, Error> {
+    pub fn program(token: &mut TokenGen) -> Result<Vec<Self>, Error> {
         let mut nodes = Vec::new();
-        while token.current() != TokenKind::Eof {
+        while !token.current().is_kind(TokenKind::Eof) {
             nodes.push(match Self::stmt(token) {
                 Ok(n) => n,
                 Err(e) => {
@@ -85,7 +82,7 @@ impl Node {
         Ok(nodes)
     }
 
-    pub fn stmt(token: &mut TokenList) -> Result<Self, Error> {
+    pub fn stmt(token: &mut TokenGen) -> Result<Self, Error> {
         let node = match Self::expr(token) {
             Ok(n) => n,
             Err(e) => {
@@ -96,18 +93,18 @@ impl Node {
         Ok(node)
     }
 
-    fn expr(token: &mut TokenList) -> Result<Self, Error> {
+    fn expr(token: &mut TokenGen) -> Result<Self, Error> {
         Self::assign(token)
     }
 
-    fn assign(token: &mut TokenList) -> Result<Self, Error> {
+    fn assign(token: &mut TokenGen) -> Result<Self, Error> {
         let node = match Self::equality(token) {
             Ok(n) => n,
             Err(e) => {
                 return Err(e);
             }
         };
-        if token.consume(DataUnion::char('=')) {
+        if token.consume(DataUnion::char('='))? {
             Ok(Node::from_child(
                 node,
                 match Self::assign(token) {
@@ -123,7 +120,7 @@ impl Node {
         }
     }
 
-    fn equality(token: &mut TokenList) -> Result<Self, Error> {
+    fn equality(token: &mut TokenGen) -> Result<Self, Error> {
         let mut node = match Self::relational(token) {
             Ok(n) => n,
             Err(e) => {
@@ -131,7 +128,7 @@ impl Node {
             }
         };
         loop {
-            if token.consume(DataUnion::str("==")) {
+            if token.consume(DataUnion::str("=="))? {
                 node = Self::from_child(
                     node,
                     match Self::relational(token) {
@@ -142,7 +139,7 @@ impl Node {
                     },
                     Ntype::Eq,
                 );
-            } else if token.consume(DataUnion::str("!=")) {
+            } else if token.consume(DataUnion::str("!="))? {
                 node = Self::from_child(
                     node,
                     match Self::relational(token) {
@@ -160,7 +157,7 @@ impl Node {
         Ok(node)
     }
 
-    fn relational(token: &mut TokenList) -> Result<Self, Error> {
+    fn relational(token: &mut TokenGen) -> Result<Self, Error> {
         let mut node = match Self::add(token) {
             Ok(n) => n,
             Err(e) => {
@@ -168,7 +165,7 @@ impl Node {
             }
         };
         loop {
-            if token.consume(DataUnion::str(">")) {
+            if token.consume(DataUnion::str(">"))? {
                 node = Self::from_child(
                     node,
                     match Self::relational(token) {
@@ -179,7 +176,7 @@ impl Node {
                     },
                     Ntype::Greater,
                 );
-            } else if token.consume(DataUnion::str("<")) {
+            } else if token.consume(DataUnion::str("<"))? {
                 node = Self::from_child(
                     match Self::relational(token) {
                         Ok(n) => n,
@@ -190,7 +187,7 @@ impl Node {
                     node,
                     Ntype::Greater,
                 );
-            } else if token.consume(DataUnion::str(">=")) {
+            } else if token.consume(DataUnion::str(">="))? {
                 node = Self::from_child(
                     node,
                     match Self::relational(token) {
@@ -201,7 +198,7 @@ impl Node {
                     },
                     Ntype::GreaterEq,
                 );
-            } else if token.consume(DataUnion::str("<=")) {
+            } else if token.consume(DataUnion::str("<="))? {
                 node = Self::from_child(
                     match Self::relational(token) {
                         Ok(n) => n,
@@ -219,7 +216,7 @@ impl Node {
         Ok(node)
     }
 
-    fn add(token: &mut TokenList) -> Result<Self, Error> {
+    fn add(token: &mut TokenGen) -> Result<Self, Error> {
         let mut node = match Node::mul(token) {
             Ok(n) => n,
             Err(e) => {
@@ -227,8 +224,8 @@ impl Node {
             }
         };
 
-        while token.current() != TokenKind::Eof {
-            if token.consume(DataUnion::char('+')) {
+        while !token.current().is_kind(TokenKind::Eof) {
+            if token.consume(DataUnion::char('+'))? {
                 let mut tmp = Node::new(Ntype::Add);
                 let right = match Node::mul(token) {
                     Ok(n) => n,
@@ -238,7 +235,7 @@ impl Node {
                 };
                 tmp.childs = Some(Rc::new((node, right)));
                 node = tmp;
-            } else if token.consume(DataUnion::char('-')) {
+            } else if token.consume(DataUnion::char('-'))? {
                 let mut tmp = Node::new(Ntype::Sub);
                 let right = match Node::mul(token) {
                     Ok(n) => n,
@@ -255,7 +252,7 @@ impl Node {
         Ok(node)
     }
 
-    fn mul(token: &mut TokenList) -> Result<Self, Error> {
+    fn mul(token: &mut TokenGen) -> Result<Self, Error> {
         let mut node = match Node::unary(token) {
             Ok(n) => n,
             Err(e) => {
@@ -263,8 +260,8 @@ impl Node {
             }
         };
 
-        while token.current() != TokenKind::Eof {
-            if token.consume(DataUnion::char('*')) {
+        while !token.current().is_kind(TokenKind::Eof) {
+            if token.consume(DataUnion::char('*'))? {
                 let mut tmp = Node::new(Ntype::Mul);
                 let right = match Node::unary(token) {
                     Ok(n) => n,
@@ -274,7 +271,7 @@ impl Node {
                 };
                 tmp.childs = Some(Rc::new((node, right)));
                 node = tmp;
-            } else if token.consume(DataUnion::char('/')) {
+            } else if token.consume(DataUnion::char('/'))? {
                 let mut tmp = Node::new(Ntype::Div);
                 let right = match Node::unary(token) {
                     Ok(n) => n,
@@ -291,10 +288,10 @@ impl Node {
         Ok(node)
     }
 
-    fn unary(token: &mut TokenList) -> Result<Self, Error> {
-        if token.consume(DataUnion::char('+')) {
+    fn unary(token: &mut TokenGen) -> Result<Self, Error> {
+        if token.consume(DataUnion::char('+'))? {
             Node::primary(token)
-        } else if token.consume(DataUnion::char('-')) {
+        } else if token.consume(DataUnion::char('-'))? {
             Ok(Node::from_child(
                 Node::number(0),
                 match Node::primary(token) {
@@ -310,8 +307,8 @@ impl Node {
         }
     }
 
-    fn primary(token: &mut TokenList) -> Result<Self, Error> {
-        if token.consume(DataUnion::char('(')) {
+    fn primary(token: &mut TokenGen) -> Result<Self, Error> {
+        if token.consume(DataUnion::char('('))? {
             let node = match Node::expr(token) {
                 Ok(n) => n,
                 Err(e) => {
@@ -328,14 +325,14 @@ impl Node {
             }
         }
         if token.consume_kind(TokenKind::Number) {
-            Ok(Node::number(match token.next_number() {
+            Ok(Node::number(match token.get_number() {
                 Ok(n) => n,
                 Err(e) => {
                     return Err(e);
                 }
             }))
         } else {
-            Ok(Node::lvar(match token.next_ident() {
+            Ok(Node::lvar(match token.get_ident() {
                 Ok(s) => s,
                 Err(e) => {
                     return Err(e);

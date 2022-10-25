@@ -5,8 +5,6 @@ mod tokenize;
 #[macro_use]
 mod array;
 
-
-
 #[cfg(test)]
 mod test {
     #[allow(unused_imports)]
@@ -20,9 +18,8 @@ mod test {
 
     #[test]
     fn it_works() {
-        let mut tokens = TokenList::from_file("./code.txt".to_string()).unwrap();
-        println!("{:?}", tokens);
-        let tree = Program::from_tokens(&mut tokens);
+        let mut tokens = TokenGen::from_file("./code.txt".to_string()).unwrap();
+        let tree = Program::from_tokens(&mut tokens).unwrap();
         println!("{:?}", tree);
     }
 
