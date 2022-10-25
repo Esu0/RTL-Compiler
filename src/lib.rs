@@ -28,12 +28,9 @@ mod test {
 
     #[test]
     fn ptr_test() {
-        let slc = &[10, 20, 30, 40];
-        let ptr = slc.as_ptr();
         let bo = ary![10, 20, 30];
-        let iter = slc.iter();
-        unsafe {
-            println!("{}", *ptr.offset(1));
+        for e in &bo {
+            println!("{}", e);
         }
     }
 }

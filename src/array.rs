@@ -60,6 +60,24 @@ impl<T, I> std::ops::IndexMut<I> for Array<T>
     }
 }
 
+impl<'a, T> IntoIterator for &'a Array<T> {
+    type IntoIter = <&'a [T] as IntoIterator>::IntoIter;
+    type Item = <Self::IntoIter as Iterator>::Item;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.slc.into_iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut Array<T> {
+    type IntoIter = <&'a mut [T] as IntoIterator>::IntoIter;
+    type Item = <Self::IntoIter as Iterator>::Item;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.slc.as_mut().into_iter()
+    }
+}
+
 impl<T> std::fmt::Debug for Array<T>
     where T: Debug
 {
