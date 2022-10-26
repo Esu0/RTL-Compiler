@@ -21,6 +21,10 @@ mod test {
         let mut tokens = TokenGen::from_file("./code.txt".to_string()).unwrap();
         let tree = Program::from_tokens(&mut tokens).unwrap();
         println!("{:?}", tree);
+        let mut var = std::collections::HashMap::new();
+        let mut mem = Vec::new();
+        tree.compile(&mut var, &mut mem).unwrap();
+        println!("{:?}\n{:?}", var, mem);
     }
 
     #[test]

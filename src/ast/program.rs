@@ -1,6 +1,7 @@
 use super::Node;
 use crate::error::Error;
 use crate::tokenize::{TokenGen, TokenKind};
+use std::collections::HashMap;
 pub struct Program {
     stmts: Vec<Node>,
 }
@@ -12,6 +13,17 @@ impl Program {
             nodes.push(Node::stmt(token)?);
         }
         Ok(Self { stmts: nodes })
+    }
+
+    pub fn compile(
+        &self,
+        var: &mut HashMap<Vec<char>, usize>,
+        mem: &mut Vec<i32>,
+    ) -> Result<(), Error> {
+        for n in &self.stmts {
+            n.compile(var, mem)?;
+        }
+        Ok(())
     }
 }
 

@@ -1,7 +1,9 @@
+use super::rettype::RetType;
 use super::Ntype;
 use crate::datatype::DataUnion;
 use crate::error::{Error, ErrorKind};
 use crate::tokenize::{TokenGen, TokenKind};
+use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Clone)]
@@ -86,11 +88,7 @@ impl Node {
     fn assign(token: &mut TokenGen) -> Result<Self, Error> {
         let node = Self::equality(token)?;
         if token.consume(DataUnion::char('='))? {
-            Ok(Node::from_child(
-                Self::assign(token)?,
-                node,
-                Ntype::Assign,
-            ))
+            Ok(Node::from_child(Self::assign(token)?, node, Ntype::Assign))
         } else {
             Ok(node)
         }
@@ -100,17 +98,9 @@ impl Node {
         let mut node = Self::relational(token)?;
         loop {
             if token.consume(DataUnion::str("=="))? {
-                node = Self::from_child(
-                    node,
-                    Self::relational(token)?,
-                    Ntype::Eq,
-                );
+                node = Self::from_child(node, Self::relational(token)?, Ntype::Eq);
             } else if token.consume(DataUnion::str("!="))? {
-                node = Self::from_child(
-                    node,
-                    Self::relational(token)?,
-                    Ntype::Neq,
-                );
+                node = Self::from_child(node, Self::relational(token)?, Ntype::Neq);
             } else {
                 break;
             }
@@ -122,29 +112,13 @@ impl Node {
         let mut node = Self::add(token)?;
         loop {
             if token.consume(DataUnion::str(">"))? {
-                node = Self::from_child(
-                    node,
-                    Self::relational(token)?,
-                    Ntype::Greater,
-                );
+                node = Self::from_child(node, Self::relational(token)?, Ntype::Greater);
             } else if token.consume(DataUnion::str("<"))? {
-                node = Self::from_child(
-                    Self::relational(token)?,
-                    node,
-                    Ntype::Greater,
-                );
+                node = Self::from_child(Self::relational(token)?, node, Ntype::Greater);
             } else if token.consume(DataUnion::str(">="))? {
-                node = Self::from_child(
-                    node,
-                    Self::relational(token)?,
-                    Ntype::GreaterEq,
-                );
+                node = Self::from_child(node, Self::relational(token)?, Ntype::GreaterEq);
             } else if token.consume(DataUnion::str("<="))? {
-                node = Self::from_child(
-                    Self::relational(token)?,
-                    node,
-                    Ntype::GreaterEq,
-                );
+                node = Self::from_child(Self::relational(token)?, node, Ntype::GreaterEq);
             } else {
                 break;
             }
@@ -208,37 +182,107 @@ impl Node {
         }
     }
 
-    fn compile(&self) -> Result<i32, Error> {
-        if let Some(ch) = &self.childs {
-            let n1 = match ch.0.compile() {
-                Ok(n) => n,
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-            let n2 = match ch.1.compile() {
-                Ok(n) => n,
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-            Ok(match self.ty {
-                Ntype::Add => n1 + n2,
-                Ntype::Sub => n1 - n2,
-                Ntype::Mul => n1 * n2,
-                Ntype::Div => n1 / n2,
-                _ => {
-                    return Err(Error::new(ErrorKind::InvalidData, "unexpected error."));
-                }
-            })
-        } else if self.ty == Ntype::Num {
-            if let DataUnion::Num(n) = self.value {
-                Ok(n)
-            } else {
-                Err(Error::new(ErrorKind::InvalidData, "unexpected error."))
-            }
+    fn get_child(&self) -> Option<&(Self, Self)> {
+        if let Some(p) = &self.childs {
+            Some(&p)
         } else {
-            Err(Error::new(ErrorKind::InvalidData, "compile error."))
+            None
+        }
+    }
+
+    fn expect_child(&self) -> Result<&(Self, Self), Error> {
+        if let Some(p) = &self.childs {
+            Ok(&p)
+        } else {
+            Err(Error::new(ErrorKind::UnexpectedError, ""))
+        }
+    }
+
+    pub fn compile(
+        &self,
+        var: &mut HashMap<Vec<char>, usize>,
+        mem: &mut Vec<i32>,
+    ) -> Result<RetType, Error> {
+        match self.ty {
+            Ntype::Add => {
+                let ch = self.expect_child()?;
+                Ok(RetType::Num(
+                    ch.0.compile(var, mem)?.rvalue(mem)? + ch.1.compile(var, mem)?.rvalue(mem)?,
+                ))
+            }
+            Ntype::Sub => {
+                let ch = self.expect_child()?;
+                Ok(RetType::Num(
+                    ch.0.compile(var, mem)?.rvalue(mem)? - ch.1.compile(var, mem)?.rvalue(mem)?,
+                ))
+            }
+            Ntype::Mul => {
+                let ch = self.expect_child()?;
+                Ok(RetType::Num(
+                    ch.0.compile(var, mem)?.rvalue(mem)? * ch.1.compile(var, mem)?.rvalue(mem)?,
+                ))
+            }
+            Ntype::Div => {
+                let ch = self.expect_child()?;
+                Ok(RetType::Num(
+                    ch.0.compile(var, mem)?.rvalue(mem)? / ch.1.compile(var, mem)?.rvalue(mem)?,
+                ))
+            }
+            Ntype::Eq => {
+                let ch = self.expect_child()?;
+                Ok(RetType::Num(
+                    (ch.0.compile(var, mem)?.rvalue(mem)? == ch.1.compile(var, mem)?.rvalue(mem)?)
+                        as i32,
+                ))
+            }
+            Ntype::Neq => {
+                let ch = self.expect_child()?;
+                Ok(RetType::Num(
+                    (ch.0.compile(var, mem)?.rvalue(mem)? != ch.1.compile(var, mem)?.rvalue(mem)?)
+                        as i32,
+                ))
+            }
+            Ntype::Greater => {
+                let ch = self.expect_child()?;
+                Ok(RetType::Num(
+                    (ch.0.compile(var, mem)?.rvalue(mem)? > ch.1.compile(var, mem)?.rvalue(mem)?)
+                        as i32,
+                ))
+            }
+            Ntype::GreaterEq => {
+                let ch = self.expect_child()?;
+                Ok(RetType::Num(
+                    (ch.0.compile(var, mem)?.rvalue(mem)? >= ch.1.compile(var, mem)?.rvalue(mem)?)
+                        as i32,
+                ))
+            }
+            Ntype::Assign => {
+                let ch = self.expect_child()?;
+                let address = ch.1.compile(var, mem)?.expect_address()?;
+                mem[address] = ch.0.compile(var, mem)?.rvalue(mem)?;
+                Ok(RetType::Address(address))
+            }
+            Ntype::Num => {
+                if let DataUnion::Num(n) = self.value {
+                    Ok(RetType::Num(n))
+                } else {
+                    Err(Error::new(ErrorKind::UnexpectedError, "unexpected error."))
+                }
+            }
+            Ntype::Lvar => {
+                if let DataUnion::String(s) = &self.value {
+                    if var.contains_key(s) {
+                        Ok(RetType::Address(var[s]))
+                    } else {
+                        let a = mem.len();
+                        var.insert(s.clone(), a);
+                        mem.push(0);
+                        Ok(RetType::Address(a))
+                    }
+                } else {
+                    Err(Error::new(ErrorKind::UnexpectedError, "unexpected error."))
+                }
+            }
         }
     }
 

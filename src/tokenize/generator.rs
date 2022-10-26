@@ -48,9 +48,9 @@ impl TokenGen {
         }
         self.prev = i;
         self.index = i;
-        if self.code[i] == ';' {
+        if is_mark_1(self.code[i]) {
+            self.current = Token::new(TokenKind::Reserved, DataUnion::char(self.code[i]));
             i += 1;
-            self.current = Token::new(TokenKind::Reserved, DataUnion::char(';'));
             self.index = i;
             Ok(())
         } else if is_ident(self.code[i]) {
@@ -193,8 +193,12 @@ fn is_ident(ch: char) -> bool {
 
 fn is_mark(ch: char) -> bool {
     const MARK: &[char] = &[
-        '=', '~', '|', '-', '^', '\\', '!', '"', '#', '$', '%', '&', '\'', '(', ')', '{', '}', '[',
-        ']', '`', '@', '*', ':', '/', '+', '<', '>', ',', '.', '?',
+        '=', '~', '|', '-', '^', '\\', '!', '"', '#', '$', '%', '&', '\'', '`', '@', '*', ':', '/', '+', '<', '>', ',', '.', '?',
     ];
     MARK.contains(&ch)
+}
+
+fn is_mark_1(ch: char) -> bool {
+    const MARK1: &[char] = &[';', '(', ')', '{', '}', '[', ']'];
+    MARK1.contains(&ch)
 }

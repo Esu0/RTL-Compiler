@@ -5,6 +5,8 @@ pub enum ErrorKind {
     CannotReadFile,
     SyntaxError,
     InvalidData,
+    UnexpectedError,
+    TypeError,
 }
 
 impl ErrorKind {
@@ -14,6 +16,8 @@ impl ErrorKind {
             ErrorKind::CannotReadFile => "ファイルを開けませんでした。",
             ErrorKind::SyntaxError => "構文エラー",
             ErrorKind::InvalidData => "終端トークンがデータを保持しています。",
+            ErrorKind::UnexpectedError => "予期せぬエラー",
+            ErrorKind::TypeError => "型エラー",
         }
     }
 }
