@@ -4,8 +4,8 @@ use crate::datatype::DataUnion;
 #[derive(Clone)]
 #[allow(dead_code)]
 pub struct Token {
-    pub tk: TokenKind,
-    pub data: DataUnion,
+    tk: TokenKind,
+    data: DataUnion,
 }
 
 impl std::fmt::Debug for Token {

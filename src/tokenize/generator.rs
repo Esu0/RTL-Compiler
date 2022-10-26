@@ -55,7 +55,7 @@ impl TokenGen {
             Ok(())
         } else if is_ident(self.code[i]) {
             i += 1;
-            while i < l && is_ident(self.code[i]) {
+            while i < l && (is_ident(self.code[i]) || self.code[i].is_ascii_digit()) {
                 i += 1;
             }
             self.current = Token::new(

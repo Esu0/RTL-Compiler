@@ -9,12 +9,7 @@ impl Program {
     pub fn from_tokens(token: &mut TokenGen) -> Result<Self, Error> {
         let mut nodes = Vec::new();
         while !token.current().is_kind(TokenKind::Eof) {
-            nodes.push(match Node::stmt(token) {
-                Ok(n) => n,
-                Err(e) => {
-                    return Err(e);
-                }
-            });
+            nodes.push(Node::stmt(token)?);
         }
         Ok(Self { stmts: nodes })
     }
